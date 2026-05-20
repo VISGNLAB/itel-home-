@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+@theme {
+  --color-brand-red: #FF0037;
+  --color-red-500: #FF0037;
+  --color-red-600: #FF0037;
+}
+
+@utility bg-checkerboard {
+  background-image: linear-gradient(45deg, #f3f4f6 25%, transparent 25%),
+    linear-gradient(-45deg, #f3f4f6 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #f3f4f6 75%),
+    linear-gradient(-45deg, transparent 75%, #f3f4f6 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px 5px, 5px 0;
+  background-color: white;
+}

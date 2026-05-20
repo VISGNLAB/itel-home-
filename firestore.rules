@@ -1,0 +1,133 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (Firebase Auth UID)
+    // Fields:
+    //   - uid: string (required) - The user's unique ID
+    //   - email: string (required) - The user's email address
+    //   - displayName: string (optional) - The user's display name
+    //   - role: string (required, enum: ['admin', 'user']) - The user's role
+    //   - createdAt: timestamp (required) - When the profile was created
+    //
+    // Collection: history
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string (required) - The user's unique ID
+    //   - imageUrl: string (required) - The generated image data
+    //   - prompt: string (required) - The prompt used
+    //   - tier: string (required) - The store tier
+    //   - location: string (required) - The market location
+    //   - createdAt: timestamp (required) - When the render was created
+    //   - isVerified: bool (optional) - Whether this is a standard example
+    //   - label: string (optional) - Label for training
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "visgnlab@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'createdAt']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.role in ['admin', 'user'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidUsage(data) {
+      return data.keys().hasAll(['userId', 'date', 'count', 'lastUpdated']) &&
+             data.userId is string &&
+             data.date is string &&
+             data.count is number &&
+             data.count >= 0 &&
+             data.lastUpdated is timestamp;
+    }
+
+    function isValidHistory(data) {
+      return data.keys().hasAll(['userId', 'imageUrl', 'prompt', 'tier', 'location', 'createdAt']) &&
+             data.userId is string &&
+             data.imageUrl is string &&
+             data.prompt is string &&
+             data.tier is string &&
+             data.location is string &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Users can read their own profile. Admins can read any profile.
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Users can create their own profile, but only with 'user' role.
+      // Admins can create any profile.
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    ((isOwner(userId) && request.resource.data.role == 'user') || isAdmin());
+      
+      // Users can update their own profile, but cannot change their role.
+      // Admins can update any profile.
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    ((isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin());
+      
+      // Only admins can delete profiles.
+      allow delete: if isAdmin();
+    }
+
+    match /usage/{usageId} {
+      // Users can read their own usage. Admins can read any usage.
+      // usageId is userId_YYYY-MM-DD
+      allow read: if isAuthenticated() && (usageId.startsWith(request.auth.uid) || isAdmin());
+      
+      // Users can create/update their own usage.
+      allow create: if isAuthenticated() && isValidUsage(request.resource.data) && 
+                    (request.resource.data.userId == request.auth.uid || isAdmin());
+      
+      allow update: if isAuthenticated() && isValidUsage(request.resource.data) && 
+                    (request.resource.data.userId == request.auth.uid || isAdmin());
+      
+      // Only admins can delete usage records.
+      allow delete: if isAdmin();
+    }
+
+    match /history/{renderId} {
+      // Users can read their own history. Admins can read any history.
+      // Verified examples are public to all authenticated users.
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.isVerified == true || isAdmin());
+      
+      // Users can create their own history.
+      allow create: if isAuthenticated() && isValidHistory(request.resource.data) && 
+                    (request.resource.data.userId == request.auth.uid || isAdmin());
+      
+      // Only admins can update (verify) or delete history.
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

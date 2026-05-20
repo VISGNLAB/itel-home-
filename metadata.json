@@ -1,5 +1,5 @@
 {
-  "name": "itel Home Spatial Renderer",
+  "name": "Itel Home 空间渲染引擎",
   "description": "Generate localized real-world store renderings for the Nigerian market based on different market tiers.",
   "requestFramePermissions": []
 }
